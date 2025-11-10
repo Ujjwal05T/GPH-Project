@@ -25,36 +25,78 @@ public class BeatAssignmentsController : BaseApiController
     [HttpGet]
     [Authorize(Roles = "Admin,ASM")]
     public async Task<IActionResult> GetAssignments(
-        [FromQuery] DateTime month,
+        [FromQuery] DateTime? month,
         [FromQuery] int? executiveId,
         [FromQuery] string? district,
-        [FromQuery] string? area)
+        [FromQuery] string? area,
+        [FromQuery] int? locationType)
     {
-        var firstDayOfMonth = new DateTime(month.Year, month.Month, 1);
-        var query = _context.BeatAssignments
+        // If no month specified, use current month
+        var targetMonth = month ?? DateTime.UtcNow;
+        var firstDayOfMonth = new DateTime(targetMonth.Year, targetMonth.Month, 1);
+
+        // Query BeatAssignments table
+        var beatQuery = _context.BeatAssignments
             .Include(a => a.SalesExecutive)
             .Where(a => a.AssignedMonth == firstDayOfMonth);
 
-        if (executiveId.HasValue) { query = query.Where(a => a.SalesExecutiveId == executiveId.Value); }
-        if (!string.IsNullOrEmpty(district)) { query = query.Where(a => a.District == district); }
-        if (!string.IsNullOrEmpty(area)) { query = query.Where(a => a.Area == area); }
-        if (CurrentUserRole == "ASM") { query = query.Where(a => a.SalesExecutive.ManagerId == CurrentUserId); }
+        if (executiveId.HasValue) { beatQuery = beatQuery.Where(a => a.SalesExecutiveId == executiveId.Value); }
+        if (!string.IsNullOrEmpty(district)) { beatQuery = beatQuery.Where(a => a.District == district); }
+        if (!string.IsNullOrEmpty(area)) { beatQuery = beatQuery.Where(a => a.Area == area); }
+        if (locationType.HasValue) { beatQuery = beatQuery.Where(a => a.LocationType == (LocationType)locationType.Value); }
+        if (CurrentUserRole == "ASM") { beatQuery = beatQuery.Where(a => a.SalesExecutive.ManagerId == CurrentUserId); }
 
-        var assignments = await query
-            .OrderBy(a => a.SalesExecutive.Name).ThenBy(a => a.LocationName)
+        var beatAssignments = await beatQuery
             .Select(a => new BeatAssignmentDto
             {
                 Id = a.Id,
+                ExecutiveId = a.SalesExecutiveId,
                 ExecutiveName = a.SalesExecutive.Name,
                 LocationName = a.LocationName,
                 Area = a.Area,
                 District = a.District,
                 Address = a.Address,
-                IsCompleted = a.IsCompleted
+                IsCompleted = a.IsCompleted,
+                LocationType = a.LocationType,
+                AssignedMonth = a.AssignedMonth
             })
             .ToListAsync();
 
-        return Ok(assignments);
+        // Query MonthlyTasks table (for Simple Task List Mode uploads)
+        var taskQuery = _context.MonthlyTasks
+            .Include(t => t.SalesExecutive)
+            .Where(t => t.AssignedMonth == firstDayOfMonth);
+
+        if (executiveId.HasValue) { taskQuery = taskQuery.Where(t => t.SalesExecutiveId == executiveId.Value); }
+        if (!string.IsNullOrEmpty(district)) { taskQuery = taskQuery.Where(t => t.District == district); }
+        if (!string.IsNullOrEmpty(area)) { taskQuery = taskQuery.Where(t => t.Area == area); }
+        if (locationType.HasValue) { taskQuery = taskQuery.Where(t => t.LocationType == (LocationType)locationType.Value); }
+        if (CurrentUserRole == "ASM") { taskQuery = taskQuery.Where(t => t.SalesExecutive.ManagerId == CurrentUserId); }
+
+        var monthlyTasks = await taskQuery
+            .Select(t => new BeatAssignmentDto
+            {
+                Id = t.Id,
+                ExecutiveId = t.SalesExecutiveId,
+                ExecutiveName = t.SalesExecutive.Name,
+                LocationName = t.LocationName,
+                Area = t.Area,
+                District = t.District,
+                Address = t.Address,
+                IsCompleted = t.IsCompleted,
+                LocationType = t.LocationType,
+                AssignedMonth = t.AssignedMonth
+            })
+            .ToListAsync();
+
+        // Merge both lists and sort
+        var allAssignments = beatAssignments
+            .Concat(monthlyTasks)
+            .OrderBy(a => a.ExecutiveName)
+            .ThenBy(a => a.LocationName)
+            .ToList();
+
+        return Ok(allAssignments);
     }
 
     // GET: /api/beat-assignments/my-assignments (For Executive)
@@ -176,4 +218,94 @@ public async Task<IActionResult> GetBeatSuggestions([FromQuery] int executiveId,
 
     return Ok(result);
 }
+
+    // GET: /api/beat-assignments/summary?month=2025-01-01
+    [HttpGet("summary")]
+    [Authorize(Roles = "Admin,ASM")]
+    public async Task<IActionResult> GetAssignmentsSummary([FromQuery] DateTime? month)
+    {
+        var targetMonth = month ?? DateTime.UtcNow;
+        var firstDayOfMonth = new DateTime(targetMonth.Year, targetMonth.Month, 1);
+
+        // Query BeatAssignments
+        var beatQuery = _context.BeatAssignments
+            .Include(a => a.SalesExecutive)
+            .Where(a => a.AssignedMonth == firstDayOfMonth);
+
+        if (CurrentUserRole == "ASM")
+        {
+            beatQuery = beatQuery.Where(a => a.SalesExecutive.ManagerId == CurrentUserId);
+        }
+
+        var beatAssignments = await beatQuery.ToListAsync();
+
+        // Query MonthlyTasks
+        var taskQuery = _context.MonthlyTasks
+            .Include(t => t.SalesExecutive)
+            .Where(t => t.AssignedMonth == firstDayOfMonth);
+
+        if (CurrentUserRole == "ASM")
+        {
+            taskQuery = taskQuery.Where(t => t.SalesExecutive.ManagerId == CurrentUserId);
+        }
+
+        var monthlyTasks = await taskQuery.ToListAsync();
+
+        // Create a combined summary by grouping both sources
+        var beatSummary = beatAssignments
+            .GroupBy(a => new { a.SalesExecutiveId, a.SalesExecutive.Name })
+            .Select(g => new
+            {
+                ExecutiveId = g.Key.SalesExecutiveId,
+                ExecutiveName = g.Key.Name,
+                TotalAssignments = g.Count(),
+                Schools = g.Count(a => a.LocationType == LocationType.School),
+                Coaching = g.Count(a => a.LocationType == LocationType.CoachingCenter),
+                Shopkeepers = g.Count(a => a.LocationType == LocationType.Shopkeeper),
+                Completed = g.Count(a => a.IsCompleted),
+                Pending = g.Count(a => !a.IsCompleted)
+            });
+
+        var taskSummary = monthlyTasks
+            .GroupBy(t => new { t.SalesExecutiveId, t.SalesExecutive.Name })
+            .Select(g => new
+            {
+                ExecutiveId = g.Key.SalesExecutiveId,
+                ExecutiveName = g.Key.Name,
+                TotalAssignments = g.Count(),
+                Schools = g.Count(t => t.LocationType == LocationType.School),
+                Coaching = g.Count(t => t.LocationType == LocationType.CoachingCenter),
+                Shopkeepers = g.Count(t => t.LocationType == LocationType.Shopkeeper),
+                Completed = g.Count(t => t.IsCompleted),
+                Pending = g.Count(t => !t.IsCompleted)
+            });
+
+        // Merge summaries by executive
+        var combinedSummary = beatSummary
+            .Concat(taskSummary)
+            .GroupBy(s => new { s.ExecutiveId, s.ExecutiveName })
+            .Select(g => new
+            {
+                ExecutiveId = g.Key.ExecutiveId,
+                ExecutiveName = g.Key.ExecutiveName,
+                TotalAssignments = g.Sum(s => s.TotalAssignments),
+                Schools = g.Sum(s => s.Schools),
+                Coaching = g.Sum(s => s.Coaching),
+                Shopkeepers = g.Sum(s => s.Shopkeepers),
+                Completed = g.Sum(s => s.Completed),
+                Pending = g.Sum(s => s.Pending)
+            })
+            .OrderBy(s => s.ExecutiveName)
+            .ToList();
+
+        var totalAssignments = beatAssignments.Count + monthlyTasks.Count;
+
+        return Ok(new
+        {
+            Month = firstDayOfMonth,
+            TotalExecutives = combinedSummary.Count,
+            TotalAssignments = totalAssignments,
+            Summary = combinedSummary
+        });
+    }
 }

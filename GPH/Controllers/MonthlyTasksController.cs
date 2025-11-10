@@ -28,7 +28,7 @@ public class MonthlyTasksController : BaseApiController
     public async Task<IActionResult> BulkUploadTasks([FromForm] IFormFile file, [FromForm] int salesExecutiveId, [FromForm] string assignedMonth, [FromForm] int locationType)
     {
         if (file == null || file.Length == 0) return BadRequest(new { message = "No file uploaded." });
-        
+
         // 2. ADD validation for the locationType
         if (!Enum.IsDefined(typeof(LocationType), locationType))
         {
@@ -49,6 +49,44 @@ public class MonthlyTasksController : BaseApiController
             stream.Position = 0;
             IWorkbook workbook = new XSSFWorkbook(stream);
             ISheet sheet = workbook.GetSheetAt(0);
+
+            // Validate header to ensure correct template is being used
+            IRow headerRow = sheet.GetRow(0);
+            if (headerRow == null)
+            {
+                return BadRequest(new { message = "Invalid file format: No header row found." });
+            }
+
+            // Determine expected header based on location type
+            string expectedHeader;
+            string locationTypeName;
+            switch ((LocationType)locationType)
+            {
+                case LocationType.School:
+                    expectedHeader = "School Name";
+                    locationTypeName = "School";
+                    break;
+                case LocationType.CoachingCenter:
+                    expectedHeader = "Coaching Name";
+                    locationTypeName = "Coaching Center";
+                    break;
+                case LocationType.Shopkeeper:
+                    expectedHeader = "Shopkeeper Name";
+                    locationTypeName = "Shopkeeper";
+                    break;
+                default:
+                    return BadRequest(new { message = "Invalid location type." });
+            }
+
+            string actualHeader = headerRow.GetCell(1)?.ToString()?.Trim() ?? "";
+
+            if (!actualHeader.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    message = $"Wrong template file! You selected '{locationTypeName}' but uploaded a file with '{actualHeader}' header. Please download and use the correct {locationTypeName} template."
+                });
+            }
 
             // 3. UPDATE column indexes to match the client's Excel format
             for (int i = 1; i <= sheet.LastRowNum; i++)

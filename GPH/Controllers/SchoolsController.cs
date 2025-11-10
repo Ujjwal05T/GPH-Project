@@ -116,8 +116,8 @@ public class SchoolsController : ControllerBase
     }
 
     // PUT: /api/schools/{id}
-   // [HttpPut("{id}")]
-   [HttpPost("{id}/update")]
+    // [HttpPut("{id}")]
+    [HttpPost("{id}/update")]
     public async Task<IActionResult> UpdateSchoolAndTeachers(int id, [FromBody] UpdateSchoolAndTeachersDto dto)
     {
         var schoolToUpdate = await _context.Schools.FindAsync(id);
@@ -158,6 +158,52 @@ public class SchoolsController : ControllerBase
 
         await _context.SaveChangesAsync();
         return NoContent();
+    }
+
+
+ // GET: /api/schools/{schoolId}/last-visit-details
+    [HttpGet("{schoolId}/last-visit-details")]
+    public async Task<IActionResult> GetLastVisitDetails(int schoolId)
+    {
+        // Step 1: Fetch the school itself to get the latest principal/student count info
+        var school = await _context.Schools.FindAsync(schoolId);
+        if (school == null)
+        {
+            return NotFound(new { message = "School not found." });
+        }
+        // Step 2: Find the most recent COMPLETED visit to this school
+        var lastVisit = await _context.Visits
+            .Where(v => v.LocationId == schoolId && 
+                         v.LocationType == LocationType.School && 
+                         v.Status == VisitStatus.Completed)
+            .OrderByDescending(v => v.CheckInTimestamp)
+            .FirstOrDefaultAsync();
+        // Step 3: Fetch all known teachers for this school
+        var knownTeachers = await _context.Teachers
+            .Where(t => t.SchoolId == schoolId)
+            .Select(t => new TeacherDto
+            {
+                Id = t.Id,
+                Name = t.Name,
+                WhatsAppNumber = t.WhatsAppNumber,
+                PrimarySubject = t.PrimarySubject,
+                ClassesTaught = t.ClassesTaught
+            })
+            .ToListAsync();
+        // Step 4: Assemble the DTO with the data we've gathered
+        var lastVisitDetails = new LastVisitDetailsDto
+        {
+            // Data from the School entity
+            PrincipalName = school.PrincipalName,
+            PrincipalMobileNumber = school.PrincipalMobileNumber,
+            TotalStudentCount = school.TotalStudentCount,
+            // Data from the last visit (if one exists)
+            PrincipalRemarks = lastVisit?.PrincipalRemarks,
+            PermissionToMeetTeachers = lastVisit?.PermissionToMeetTeachers ?? false,
+            // The list of teachers
+            KnownTeachers = knownTeachers
+        };
+        return Ok(lastVisitDetails);
     }
 
 }

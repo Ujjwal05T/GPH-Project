@@ -206,6 +206,10 @@ namespace GPH.Migrations
                     b.Property<int?>("CreatedByExecutiveId")
                         .HasColumnType("int");
 
+                    b.Property<string>("District")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool>("IsLocationVerified")
                         .HasColumnType("bit");
 
@@ -703,6 +707,10 @@ namespace GPH.Migrations
                     b.Property<int?>("CreatedByExecutiveId")
                         .HasColumnType("int");
 
+                    b.Property<string>("District")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool>("IsLocationVerified")
                         .HasColumnType("bit");
 
@@ -761,6 +769,13 @@ namespace GPH.Migrations
 
                     b.Property<int?>("CreatedByExecutiveId")
                         .HasColumnType("int");
+
+                    b.Property<int>("CurrentStockStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("District")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsLocationVerified")
                         .HasColumnType("bit");
@@ -830,6 +845,30 @@ namespace GPH.Migrations
                     b.HasIndex("SchoolId");
 
                     b.ToTable("Teachers");
+                });
+
+            modelBuilder.Entity("GPH.Models.TrackingSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DailyTrackingId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DailyTrackingId");
+
+                    b.ToTable("TrackingSessions");
                 });
 
             modelBuilder.Entity("GPH.Models.Visit", b =>
@@ -1110,6 +1149,17 @@ namespace GPH.Migrations
                     b.Navigation("School");
                 });
 
+            modelBuilder.Entity("GPH.Models.TrackingSession", b =>
+                {
+                    b.HasOne("GPH.Models.DailyTracking", "DailyTracking")
+                        .WithMany("TrackingSessions")
+                        .HasForeignKey("DailyTrackingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DailyTracking");
+                });
+
             modelBuilder.Entity("GPH.Models.Visit", b =>
                 {
                     b.HasOne("GPH.Models.SalesExecutive", "SalesExecutive")
@@ -1140,6 +1190,8 @@ namespace GPH.Migrations
             modelBuilder.Entity("GPH.Models.DailyTracking", b =>
                 {
                     b.Navigation("LocationPoints");
+
+                    b.Navigation("TrackingSessions");
                 });
 
             modelBuilder.Entity("GPH.Models.School", b =>

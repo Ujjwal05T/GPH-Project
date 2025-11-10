@@ -45,6 +45,24 @@ public class BeatUploadController : BaseApiController
             IWorkbook workbook = new XSSFWorkbook(stream);
             ISheet sheet = workbook.GetSheetAt(0);
 
+            // Validate header to ensure correct template is being used
+            IRow headerRow = sheet.GetRow(0);
+            if (headerRow == null)
+            {
+                return BadRequest(new { message = "Invalid file format: No header row found." });
+            }
+
+            string expectedHeader = "School Name";
+            string actualHeader = headerRow.GetCell(1)?.ToString()?.Trim() ?? "";
+
+            if (!actualHeader.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    message = $"Wrong template file! Expected '{expectedHeader}' in column B, but found '{actualHeader}'. Please download and use the correct School template."
+                });
+            }
+
             for (int i = 1; i <= sheet.LastRowNum; i++)
             {
                 IRow row = sheet.GetRow(i);
@@ -197,6 +215,24 @@ public class BeatUploadController : BaseApiController
             IWorkbook workbook = new XSSFWorkbook(stream);
             ISheet sheet = workbook.GetSheetAt(0);
 
+            // Validate header to ensure correct template is being used
+            IRow headerRow = sheet.GetRow(0);
+            if (headerRow == null)
+            {
+                return BadRequest(new { message = "Invalid file format: No header row found." });
+            }
+
+            string expectedHeader = "Shopkeeper Name";
+            string actualHeader = headerRow.GetCell(1)?.ToString()?.Trim() ?? "";
+
+            if (!actualHeader.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    message = $"Wrong template file! Expected '{expectedHeader}' in column B, but found '{actualHeader}'. Please download and use the correct Shopkeeper template."
+                });
+            }
+
             for (int i = 1; i <= sheet.LastRowNum; i++)
             {
                 IRow row = sheet.GetRow(i);
@@ -248,6 +284,24 @@ public class BeatUploadController : BaseApiController
             IWorkbook workbook = new XSSFWorkbook(stream);
             ISheet sheet = workbook.GetSheetAt(0);
 
+            // Validate header to ensure correct template is being used
+            IRow headerRow = sheet.GetRow(0);
+            if (headerRow == null)
+            {
+                return BadRequest(new { message = "Invalid file format: No header row found." });
+            }
+
+            string expectedHeader = "Coaching Name";
+            string actualHeader = headerRow.GetCell(1)?.ToString()?.Trim() ?? "";
+
+            if (!actualHeader.Equals(expectedHeader, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    message = $"Wrong template file! Expected '{expectedHeader}' in column B, but found '{actualHeader}'. Please download and use the correct Coaching template."
+                });
+            }
+
             for (int i = 1; i <= sheet.LastRowNum; i++)
             {
                 IRow row = sheet.GetRow(i);
@@ -259,7 +313,7 @@ public class BeatUploadController : BaseApiController
                 string district = row.GetCell(4)?.ToString()?.Trim() ?? "";
                 string teacherName = row.GetCell(5)?.ToString()?.Trim() ?? "";
                 string mobileNo = row.GetCell(6)?.ToString()?.Trim() ?? "";
-                
+
                 var existingCoaching = await _context.CoachingCenters.FirstOrDefaultAsync(c => c.Name.ToLower() == coachingName.ToLower());
                 int locationId;
                 if (existingCoaching != null)
@@ -276,13 +330,105 @@ public class BeatUploadController : BaseApiController
                 assignments.Add(new BeatAssignment { SalesExecutiveId = dto.SalesExecutiveId, LocationId = locationId, LocationType = LocationType.CoachingCenter, AssignedMonth = firstDayOfMonth, LocationName = coachingName, Address = address, District = district });
             }
         }
-        
+
         var oldAssignments = await _context.BeatAssignments.Where(a => a.SalesExecutiveId == dto.SalesExecutiveId && a.AssignedMonth == firstDayOfMonth && a.LocationType == LocationType.CoachingCenter).ToListAsync();
         _context.BeatAssignments.RemoveRange(oldAssignments);
         await _context.BeatAssignments.AddRangeAsync(assignments);
         await _context.SaveChangesAsync();
 
         return Ok(new { message = $"Successfully assigned {assignments.Count} coaching centers." });
+    }
+
+    // GET: /api/beat-upload/template?locationType=0
+    [HttpGet("template")]
+    public IActionResult DownloadTemplate([FromQuery] int locationType = 0)
+    {
+        if (!Enum.IsDefined(typeof(LocationType), locationType))
+        {
+            return BadRequest("Invalid location type specified.");
+        }
+
+        IWorkbook workbook = new XSSFWorkbook();
+        ISheet sheet = workbook.CreateSheet("Beat Assignment");
+
+        // Create header style
+        IFont boldFont = workbook.CreateFont();
+        boldFont.IsBold = true;
+        ICellStyle headerStyle = workbook.CreateCellStyle();
+        headerStyle.SetFont(boldFont);
+
+        // Create header row
+        IRow headerRow = sheet.CreateRow(0);
+        headerRow.CreateCell(0).SetCellValue("S.No");
+
+        // Set column headers based on location type
+        switch ((LocationType)locationType)
+        {
+            case LocationType.School:
+                headerRow.CreateCell(1).SetCellValue("School Name");
+                break;
+            case LocationType.CoachingCenter:
+                headerRow.CreateCell(1).SetCellValue("Coaching Name");
+                break;
+            case LocationType.Shopkeeper:
+                headerRow.CreateCell(1).SetCellValue("Shopkeeper Name");
+                break;
+        }
+
+        headerRow.CreateCell(2).SetCellValue("Area");
+        headerRow.CreateCell(3).SetCellValue("District");
+        headerRow.CreateCell(4).SetCellValue("Address");
+
+        // Apply header style
+        for (int i = 0; i < 5; i++)
+        {
+            headerRow.GetCell(i).CellStyle = headerStyle;
+        }
+
+        // Add sample row
+        IRow sampleRow = sheet.CreateRow(1);
+        sampleRow.CreateCell(0).SetCellValue(1);
+
+        switch ((LocationType)locationType)
+        {
+            case LocationType.School:
+                sampleRow.CreateCell(1).SetCellValue("Example School Name");
+                break;
+            case LocationType.CoachingCenter:
+                sampleRow.CreateCell(1).SetCellValue("Example Coaching Center");
+                break;
+            case LocationType.Shopkeeper:
+                sampleRow.CreateCell(1).SetCellValue("Example Shop Name");
+                break;
+        }
+
+        sampleRow.CreateCell(2).SetCellValue("Central Area");
+        sampleRow.CreateCell(3).SetCellValue("Bhopal");
+        sampleRow.CreateCell(4).SetCellValue("123 Main Street");
+
+        // Auto-size columns
+        for (int i = 0; i < 5; i++)
+        {
+            sheet.AutoSizeColumn(i);
+            // Add some padding
+            sheet.SetColumnWidth(i, sheet.GetColumnWidth(i) + 1024);
+        }
+
+        // Stream the file back to the user
+        using (var memoryStream = new MemoryStream())
+        {
+            workbook.Write(memoryStream);
+            var content = memoryStream.ToArray();
+
+            string locationTypeName = ((LocationType)locationType).ToString();
+            string fileName = $"BeatAssignment_{locationTypeName}_Template.xlsx";
+
+            return File(
+                content,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileName
+            );
+        }
     }
 
 }

@@ -34,6 +34,9 @@ public DbSet<CoachingCenter> CoachingCenters { get; set; }
 public DbSet<Shopkeeper> Shopkeepers { get; set; }
 public DbSet<BeatAssignment> BeatAssignments { get; set; }
 public DbSet<MonthlyTask> MonthlyTasks { get; set; } // <-- ADD THIS LINE
+public DbSet<TrackingSession> TrackingSessions { get; set; }
+
+
 
     // This method is essential for fine-tuning the database model.
 

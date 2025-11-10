@@ -15,6 +15,8 @@ public class PlannedLocationDto
     public double? Longitude { get; set; }
           public string? Address { get; set; }
         public string? City { get; set; }
+            public string? District { get; set; } // <-- ADD THIS LINE
+
         public string? Pincode { get; set; }
 }
 public class CreateBeatPlanDto

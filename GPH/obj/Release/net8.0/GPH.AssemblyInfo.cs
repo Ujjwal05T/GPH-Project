@@ -12,9 +12,9 @@ using System.Reflection;
 
 [assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("cf506e33-4c50-4f30-9fc7-36b143c8fca3")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("GPH")]
-[assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
+[assembly: System.Reflection.AssemblyConfigurationAttribute("release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b2df243aa02ea6a983c1d1a1d2452ca6a18bafc3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ce29d039a412b9c8bd03b65c19e09bcd3d8ab7d4")]
 [assembly: System.Reflection.AssemblyProductAttribute("GPH")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GPH")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

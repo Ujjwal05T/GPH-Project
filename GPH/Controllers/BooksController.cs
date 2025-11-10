@@ -2,6 +2,8 @@
 using GPH.Data;
 using GPH.DTOs;
 using GPH.Models;
+using GPH.Models.DTOs;
+using GPH.Services;
 using Microsoft.AspNetCore.Authorization; // Authorize add karein
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,9 +14,11 @@ namespace GPH.Controllers;
 public class BooksController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    public BooksController(ApplicationDbContext context)
+    private readonly BookExcelService _excelService;
+    public BooksController(ApplicationDbContext context, BookExcelService excelService)
     {
         _context = context;
+        _excelService = excelService;
     }
     // POST: /api/books
     [HttpPost]
@@ -27,7 +31,8 @@ public class BooksController : ControllerBase
             ClassLevel = bookDto.ClassLevel,
             Medium = bookDto.Medium,
             IsSpecimen = true,
-            IsGift = bookDto.IsGift
+            IsGift = bookDto.IsGift,
+            UnitPrice = bookDto.UnitPrice
         };
         _context.Books.Add(newBook);
         await _context.SaveChangesAsync();
@@ -46,7 +51,8 @@ public class BooksController : ControllerBase
                 Subject = b.Subject,
                 ClassLevel = b.ClassLevel,
                 Medium = b.Medium,
-                IsGift = b.IsGift
+                IsGift = b.IsGift,
+                UnitPrice = b.UnitPrice
             }).ToListAsync();
         return Ok(books);
     }
@@ -67,6 +73,7 @@ public class BooksController : ControllerBase
         bookToUpdate.ClassLevel = bookDto.ClassLevel;
         bookToUpdate.Medium = bookDto.Medium;
         bookToUpdate.IsGift = bookDto.IsGift;
+        bookToUpdate.UnitPrice = bookDto.UnitPrice;
         await _context.SaveChangesAsync();
         return NoContent(); // Success, but no content to return
     }
@@ -83,6 +90,87 @@ public class BooksController : ControllerBase
         _context.Books.Remove(bookToDelete);
         await _context.SaveChangesAsync();
         return NoContent(); // Success
+    }
+
+    // === BULK UPLOAD & DOWNLOAD METHODS ===
+
+    // GET: /api/books/template - Download Excel template
+    [HttpGet("template")]
+    public IActionResult DownloadTemplate()
+    {
+        var fileBytes = _excelService.GenerateExcelTemplate();
+        return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "books_template.xlsx");
+    }
+
+    // GET: /api/books/export - Export all books to Excel
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportBooks()
+    {
+        var books = await _context.Books.ToListAsync();
+        var fileBytes = _excelService.ExportBooksToExcel(books);
+        return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"books_export_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+    }
+
+    // POST: /api/books/bulk-upload - Upload Excel file with books
+    [HttpPost("bulk-upload")]
+    public async Task<IActionResult> BulkUploadBooks(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "No file uploaded" });
+        }
+
+        if (!file.FileName.EndsWith(".xlsx"))
+        {
+            return BadRequest(new { message = "Only .xlsx files are supported" });
+        }
+
+        using var stream = file.OpenReadStream();
+        var result = await _excelService.ImportBooksFromExcel(stream);
+
+        return Ok(result);
+    }
+
+    // POST: /api/books/bulk-delete - Delete multiple books
+    [HttpPost("bulk-delete")]
+    public async Task<IActionResult> BulkDeleteBooks([FromBody] List<int> bookIds)
+    {
+        var result = new BulkDeleteResultDto
+        {
+            TotalRequested = bookIds.Count
+        };
+
+        if (bookIds == null || bookIds.Count == 0)
+        {
+            return BadRequest(new { message = "No book IDs provided" });
+        }
+
+        foreach (var bookId in bookIds)
+        {
+            try
+            {
+                var book = await _context.Books.FindAsync(bookId);
+                if (book == null)
+                {
+                    result.Errors.Add($"Book with ID {bookId} not found");
+                    result.FailureCount++;
+                    continue;
+                }
+
+                _context.Books.Remove(book);
+                await _context.SaveChangesAsync();
+
+                result.SuccessCount++;
+                result.DeletedBookIds.Add(bookId);
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add($"Failed to delete book ID {bookId}: {ex.Message}");
+                result.FailureCount++;
+            }
+        }
+
+        return Ok(result);
     }
 }
 

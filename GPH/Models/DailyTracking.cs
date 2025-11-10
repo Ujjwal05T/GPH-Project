@@ -23,4 +23,6 @@ public class DailyTracking
         [MaxLength(500)] // A reasonable length for an address
     public string? LastKnownAddress { get; set; }
     public ICollection<LocationPoint> LocationPoints { get; set; } = new List<LocationPoint>();
+       public ICollection<TrackingSession> TrackingSessions { get; set; } = new List<TrackingSession>();
+
 }

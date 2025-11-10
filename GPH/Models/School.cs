@@ -18,8 +18,10 @@ public class School
     public string? AssignedArea { get; set; }
 
 
-    [MaxLength(100)]
-    public string City { get; set; } = string.Empty;
+   [MaxLength(100)]
+   public string City { get; set; } = string.Empty;
+        [MaxLength(100)] // <-- ADD THIS PROPERTY
+    public string? District { get; set; }
 
     [MaxLength(10)]
     public string Pincode { get; set; } = string.Empty;

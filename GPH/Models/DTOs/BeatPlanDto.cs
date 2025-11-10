@@ -18,4 +18,5 @@ public class BeatPlanDto
     public double? Longitude { get; set; }
     public DateTime PlanDate { get; set; }
     public PlanStatus Status { get; set; }
+
 }

@@ -20,4 +20,6 @@ public class BulkConsignmentDto
 
     [Required]
     public IFormFile File { get; set; } = null!; // The uploaded Excel file
+
+    public IFormFile? BiltyBillFile { get; set; }
 }

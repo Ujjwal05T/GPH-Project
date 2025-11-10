@@ -12,6 +12,9 @@ public class CoachingCenter
     public string? Address { get; set; }
     [MaxLength(100)]
     public string? City { get; set; }
+    
+    [MaxLength(100)] // <-- ADD THIS
+    public string? District { get; set; }
     [MaxLength(10)]
     public string? Pincode { get; set; }
     public double? Latitude { get; set; }

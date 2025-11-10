@@ -90,6 +90,8 @@ public class ConsignmentsController : ControllerBase
     {
         var consignments = await _context.Consignments
             .Include(c => c.SalesExecutive)
+            .Include(c => c.Items)
+                .ThenInclude(item => item.Book)
             .OrderByDescending(c => c.DispatchDate)
             .Select(c => new ConsignmentDto
             {
@@ -100,7 +102,18 @@ public class ConsignmentsController : ControllerBase
                 Status = c.Status,
                 DispatchDate = c.DispatchDate,
                 ReceivedDate = c.ReceivedDate,
-                FreightCost = c.FreightCost
+                FreightCost = c.FreightCost,
+                BiltyBillUrl = c.BiltyBillUrl,
+                Items = c.Items.Select(item => new ConsignmentItemDto
+                {
+                    Id = item.Id,
+                    BookId = item.BookId,
+                    BookTitle = item.Book.Title,
+                    BookSubject = item.Book.Subject,
+                    BookClassLevel = item.Book.ClassLevel,
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice
+                }).ToList()
             })
             .ToListAsync();
         return Ok(consignments);
@@ -134,11 +147,13 @@ public class ConsignmentsController : ControllerBase
                 // Naya Logic: Items ki list ko map karein
                 Items = c.Items.Select(item => new ConsignmentItemDto
                 {
+                    Id = item.Id,
                     BookId = item.BookId,
-                    BookTitle = $"{item.Book.Subject} - {item.Book.ClassLevel} ({item.Book.Medium ?? "N/A"})",
+                    BookTitle = item.Book.Title,
                     BookSubject = item.Book.Subject,
                     BookClassLevel = item.Book.ClassLevel,
-                    Quantity = item.Quantity
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice
                 }).ToList()
             })
             .ToListAsync();
@@ -455,6 +470,23 @@ refHeaderRow.GetCell(4).CellStyle = headerStyle; // <-- And its style
             return BadRequest("No valid items could be parsed from the uploaded file.");
         }
 
+ string? billUrl = null;
+    if (dto.BiltyBillFile != null && dto.BiltyBillFile.Length > 0)
+    {
+        var uploadsFolderPath = Path.Combine(_hostingEnvironment.WebRootPath, "uploads", "bilty_bills");
+        if (!Directory.Exists(uploadsFolderPath))
+        {
+            Directory.CreateDirectory(uploadsFolderPath);
+        }
+        var uniqueFileName = $"{Guid.NewGuid()}_{dto.BiltyBillFile.FileName}";
+       var filePath = Path.Combine(uploadsFolderPath, uniqueFileName);
+using (var fileStream = new FileStream(filePath, FileMode.Create)) // <-- YAHAN 'stream' ko 'fileStream' kiya gaya hai
+{
+    await dto.BiltyBillFile.CopyToAsync(fileStream); // <-- YAHAN bhi 'stream' ko 'fileStream' kiya gaya hai
+}
+        billUrl = $"{Request.Scheme}://{Request.Host}/uploads/bilty_bills/{uniqueFileName}";
+    }
+
         // If parsing was successful, create the consignment
         var newConsignment = new Consignment
         {
@@ -463,6 +495,7 @@ refHeaderRow.GetCell(4).CellStyle = headerStyle; // <-- And its style
             DispatchDate = dto.DispatchDate.ToUniversalTime(),
             SalesExecutiveId = dto.SalesExecutiveId,
             Status = ConsignmentStatus.InTransit,
+  BiltyBillUrl = billUrl,
             Items = parsedItems // Add all the items parsed from the Excel file
         };
 

@@ -1,6 +1,8 @@
 namespace GPH.DTOs;
 public class DetailedVisitDto
 {
+          public int Id { get; set; }
+
     public DateTime VisitDate { get; set; }
     public string ExecutiveName { get; set; } = string.Empty;
     public string LocationName { get; set; } = string.Empty;

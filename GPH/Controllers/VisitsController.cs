@@ -104,7 +104,7 @@ public class VisitsController : BaseApiController
             Latitude = visitDto.Latitude,
             Longitude = visitDto.Longitude,
             Notes = visitDto.Notes,
-            CheckInPhotoUrl = Path.Combine("uploads", uniqueFileName),
+            CheckInPhotoUrl = Path.Combine("uploads", uniqueFileName).Replace('\\', '/'),
             Status = VisitStatus.InProgress
 
         };

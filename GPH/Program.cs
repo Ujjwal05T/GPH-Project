@@ -64,6 +64,7 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddScoped<IDailyAllowanceService, DailyAllowanceService>();
 builder.Services.AddScoped<IExcelParserService, ExcelParserService>();
+builder.Services.AddScoped<BookExcelService>();
 builder.Services.AddHttpClient<IGeocodingService, GoogleGeocodingService>();
 
 builder.Services.AddControllers();
