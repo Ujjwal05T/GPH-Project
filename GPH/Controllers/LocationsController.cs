@@ -172,7 +172,9 @@ public class LocationsController : BaseApiController
                 Id = s.Location.Id,
                 Name = s.Location.Name,
                 Type = LocationType.School,
-                Address = s.Location.Address
+                Address = s.Location.Address,
+                Latitude = s.Location.OfficialLatitude,
+            Longitude = s.Location.OfficialLongitude
             });
         results.AddRange(nearbySchools);
         // Search Coaching Centers
@@ -187,7 +189,9 @@ public class LocationsController : BaseApiController
                 Id = c.Location.Id,
                 Name = c.Location.Name,
                 Type = LocationType.CoachingCenter,
-                Address = c.Location.Address
+                Address = c.Location.Address,
+                Latitude = c.Location.Latitude,
+                Longitude = c.Location.Longitude
             });
         results.AddRange(nearbyCoachings);
         // Search Shopkeepers
@@ -202,7 +206,9 @@ public class LocationsController : BaseApiController
                 Id = s.Location.Id,
                 Name = s.Location.Name,
                 Type = LocationType.Shopkeeper,
-                Address = s.Location.Address
+                Address = s.Location.Address,
+                Latitude = s.Location.Latitude,
+                Longitude = s.Location.Longitude
             });
         results.AddRange(nearbyShops);
         // Return the top 5 closest results, ordered by distance
