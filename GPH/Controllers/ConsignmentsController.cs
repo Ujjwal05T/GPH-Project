@@ -55,7 +55,7 @@ public class ConsignmentsController : ControllerBase
         {
             TransportCompanyName = consignmentDto.TransportCompanyName,
             BiltyNumber = consignmentDto.BiltyNumber,
-            DispatchDate = consignmentDto.DispatchDate.ToUniversalTime(),
+            DispatchDate = consignmentDto.DispatchDate.Date, // Fix: Use .Date to get date without time component
             SalesExecutiveId = consignmentDto.SalesExecutiveId,
             Status = ConsignmentStatus.InTransit,
             BiltyBillUrl = billUrl
