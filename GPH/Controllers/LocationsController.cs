@@ -173,7 +173,7 @@ public class LocationsController : BaseApiController
                 Name = s.Location.Name,
                 Type = LocationType.School,
                 Address = s.Location.Address,
-                Latitude = s.Location.OfficialLatitude,
+                   Latitude = s.Location.OfficialLatitude,
             Longitude = s.Location.OfficialLongitude
             });
         results.AddRange(nearbySchools);
@@ -190,8 +190,8 @@ public class LocationsController : BaseApiController
                 Name = c.Location.Name,
                 Type = LocationType.CoachingCenter,
                 Address = c.Location.Address,
-                Latitude = c.Location.Latitude,
-                Longitude = c.Location.Longitude
+ Latitude = c.Location.Latitude,
+            Longitude = c.Location.Longitude
             });
         results.AddRange(nearbyCoachings);
         // Search Shopkeepers
@@ -207,14 +207,12 @@ public class LocationsController : BaseApiController
                 Name = s.Location.Name,
                 Type = LocationType.Shopkeeper,
                 Address = s.Location.Address,
-                Latitude = s.Location.Latitude,
-                Longitude = s.Location.Longitude
+   Latitude = s.Location.Latitude,
+            Longitude = s.Location.Longitude
             });
         results.AddRange(nearbyShops);
         // Return the top 5 closest results, ordered by distance
         var finalResults = results.OrderBy(r => GeoHelper.GetDistance(lat, lng, r.Latitude, r.Longitude)).Take(5).ToList();
         return Ok(finalResults);
     }
-
-
 }

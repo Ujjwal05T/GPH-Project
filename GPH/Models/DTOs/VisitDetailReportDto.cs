@@ -37,13 +37,13 @@ public class VisitDetailReportDto
     public double Latitude { get; set; }
     public double Longitude { get; set; }
     // Principal's Meeting Details
-        // public string? PrincipalName { get; set; } // <-- YEH ADD KAREIN
-    // public string? PrincipalMobileNumber { get; set; } // <-- YEH ADD KAREIN
-       public string? ContactPersonLabel { get; set; } // e.g., "Principal", "Teacher", "Owner"
+    public string? ContactPersonLabel { get; set; } // e.g., "Principal", "Teacher", "Owner"
     public string? ContactPersonName { get; set; }
     public string? ContactPersonMobile { get; set; }
     public string? PrincipalRemarks { get; set; }
     public bool PermissionToMeetTeachers { get; set; }
+    // Visit Tracking
+    public int LocationVisitCount { get; set; } // Total visits to this location
     // Teacher Interactions
     public List<TeacherInteractionDto> TeacherInteractions { get; set; } = new();
 }

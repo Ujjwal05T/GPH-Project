@@ -33,9 +33,10 @@ public class CoachingCenter
     [MaxLength(100)]
     public string? Classes { get; set; }
     public bool IsLocationVerified { get; set; } = false;
-            public int? CreatedByExecutiveId { get; set; } // Nullable
-            public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public int? CreatedByExecutiveId { get; set; } // Nullable
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-
+    // --- Visit Tracking ---
+    public int VisitCount { get; set; } = 0;
 }
     // We can add fields specific to coaching centers here later

@@ -47,11 +47,13 @@ public DbSet<TrackingSession> TrackingSessions { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-         modelBuilder.Entity<Book>(entity =>
-    {
-        entity.HasIndex(e => e.Title)
-              .IsUnique();
-    });
+        modelBuilder.Entity<Book>(entity =>
+   {
+       entity.HasIndex(e => e.Title)
+             .IsUnique();
+   });
+    modelBuilder.Entity<LocationPoint>()
+                .ToTable(tb => tb.HasTrigger("trg_DeleteZeroLatitude"));
 
         // --- FIX FOR MULTIPLE CASCADE PATHS ---
         // (This part is from our previous fix and is still needed)

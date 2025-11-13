@@ -145,6 +145,131 @@ public class ReportsController : BaseApiController
         }).ToListAsync();
         return Ok(summary);
     }
+    // --- NEW ENDPOINT: GROUPED BY LOCATION ---
+    [HttpGet("locations-summary")]
+    [Authorize(Roles = "Admin,ASM")]
+    public async Task<IActionResult> GetLocationsSummary([FromQuery] DateTime startDate, [FromQuery] DateTime endDate, [FromQuery] int? executiveId)
+    {
+        var query = _context.Visits
+            .Include(v => v.SalesExecutive)
+            .Where(v => v.CheckInTimestamp.Date >= startDate.Date && v.CheckInTimestamp.Date <= endDate.Date);
+
+        if (executiveId.HasValue)
+        {
+            query = query.Where(v => v.SalesExecutiveId == executiveId.Value);
+        }
+
+        if (CurrentUserRole == "ASM")
+        {
+            query = query.Where(v => v.SalesExecutive != null && v.SalesExecutive.ManagerId == CurrentUserId);
+        }
+
+        var visits = await query.ToListAsync();
+
+        // Group by LocationId and LocationType
+        var grouped = visits
+            .GroupBy(v => new { v.LocationId, v.LocationType })
+            .Select(g => new
+            {
+                LocationId = g.Key.LocationId,
+                LocationType = g.Key.LocationType,
+                TotalVisits = g.Count(),
+                LastVisit = g.OrderByDescending(v => v.CheckInTimestamp).First()
+            })
+            .ToList();
+
+        // Fetch location names
+        var schoolIds = grouped.Where(g => g.LocationType == LocationType.School).Select(g => g.LocationId).ToList();
+        var coachingIds = grouped.Where(g => g.LocationType == LocationType.CoachingCenter).Select(g => g.LocationId).ToList();
+        var shopIds = grouped.Where(g => g.LocationType == LocationType.Shopkeeper).Select(g => g.LocationId).ToList();
+
+        var schools = await _context.Schools.Where(s => schoolIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id);
+        var coachings = await _context.CoachingCenters.Where(c => coachingIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id);
+        var shops = await _context.Shopkeepers.Where(s => shopIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id);
+
+        var result = grouped.Select(g => new LocationVisitSummaryDto
+        {
+            LocationId = g.LocationId,
+            LocationType = g.LocationType.ToString(),
+            LocationName = g.LocationType switch
+            {
+                LocationType.School => schools.GetValueOrDefault(g.LocationId)?.Name ?? "Unknown",
+                LocationType.CoachingCenter => coachings.GetValueOrDefault(g.LocationId)?.Name ?? "Unknown",
+                LocationType.Shopkeeper => shops.GetValueOrDefault(g.LocationId)?.Name ?? "Unknown",
+                _ => "Unknown"
+            },
+            Area = g.LocationType == LocationType.School ? schools.GetValueOrDefault(g.LocationId)?.AssignedArea ?? "N/A" : "N/A",
+            TotalVisits = g.TotalVisits,
+            LastVisitDate = TimeZoneHelper.ConvertUtcToIst(g.LastVisit.CheckInTimestamp),
+            LastVisitExecutive = g.LastVisit.SalesExecutive.Name,
+            LastVisitId = g.LastVisit.Id
+        })
+        .OrderByDescending(x => x.LastVisitDate)
+        .ToList();
+
+        return Ok(result);
+    }
+
+    // --- NEW ENDPOINT: GET ALL VISITS FOR A LOCATION ---
+    [HttpGet("location-visits")]
+    [Authorize(Roles = "Admin,ASM")]
+    public async Task<IActionResult> GetLocationVisitHistory([FromQuery] int locationId, [FromQuery] int locationType, [FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+    {
+        var locationTypeEnum = (LocationType)locationType;
+
+        var query = _context.Visits
+            .Include(v => v.SalesExecutive)
+            .Where(v => v.LocationId == locationId && v.LocationType == locationTypeEnum);
+
+        if (startDate.HasValue && endDate.HasValue)
+        {
+            query = query.Where(v => v.CheckInTimestamp.Date >= startDate.Value.Date && v.CheckInTimestamp.Date <= endDate.Value.Date);
+        }
+
+        if (CurrentUserRole == "ASM")
+        {
+            query = query.Where(v => v.SalesExecutive.ManagerId == CurrentUserId);
+        }
+
+        var visits = await query.OrderByDescending(v => v.CheckInTimestamp).ToListAsync();
+
+        var visitIds = visits.Select(v => v.Id).ToList();
+
+        // Get teacher interaction counts
+        var teacherCounts = await _context.BookDistributions
+            .Where(bd => visitIds.Contains(bd.VisitId))
+            .GroupBy(bd => bd.VisitId)
+            .Select(g => new { VisitId = g.Key, Count = g.Select(x => x.TeacherId).Distinct().Count() })
+            .ToDictionaryAsync(x => x.VisitId, x => x.Count);
+
+        // Get books distributed counts
+        var bookCounts = await _context.BookDistributions
+            .Where(bd => visitIds.Contains(bd.VisitId))
+            .GroupBy(bd => bd.VisitId)
+            .Select(g => new { VisitId = g.Key, Count = g.Sum(x => x.Quantity) })
+            .ToDictionaryAsync(x => x.VisitId, x => x.Count);
+
+        // Get orders placed counts
+        var orderCounts = await _context.Orders
+            .Where(o => visitIds.Contains(o.VisitId))
+            .GroupBy(o => o.VisitId)
+            .Select(g => new { VisitId = g.Key, Count = g.Sum(x => x.Quantity) })
+            .ToDictionaryAsync(x => x.VisitId, x => x.Count);
+
+        var result = visits.Select(v => new LocationVisitHistoryDto
+        {
+            VisitId = v.Id,
+            VisitDate = TimeZoneHelper.ConvertUtcToIst(v.CheckInTimestamp),
+            ExecutiveName = v.SalesExecutive.Name,
+            TeachersInteracted = teacherCounts.GetValueOrDefault(v.Id, 0),
+            BooksDistributed = bookCounts.GetValueOrDefault(v.Id, 0),
+            OrdersPlaced = orderCounts.GetValueOrDefault(v.Id, 0),
+            PrincipalRemarks = v.PrincipalRemarks
+        }).ToList();
+
+        return Ok(result);
+    }
+
     // --- YEH NAYA ENDPOINT HAI: DETAILED VISIT LOG KE LIYE ---
     [HttpGet("detailed-visits")]
     [Authorize(Roles = "Admin,ASM")]
@@ -159,19 +284,37 @@ public class ReportsController : BaseApiController
         }
         var visits = await query.OrderByDescending(v => v.CheckInTimestamp).ToListAsync();
 
-        // Location names ko efficiently fetch karein
+        // Location names and visit counts ko efficiently fetch karein
         var schoolIds = visits.Where(v => v.LocationType == LocationType.School).Select(v => v.LocationId).Distinct().ToList();
+        var coachingIds = visits.Where(v => v.LocationType == LocationType.CoachingCenter).Select(v => v.LocationId).Distinct().ToList();
+        var shopIds = visits.Where(v => v.LocationType == LocationType.Shopkeeper).Select(v => v.LocationId).Distinct().ToList();
+
         var schools = await _context.Schools.Where(s => schoolIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id);
-        // (Coaching aur Shopkeeper ke liye bhi yahan add kar sakte hain)
+        var coachings = await _context.CoachingCenters.Where(c => coachingIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id);
+        var shops = await _context.Shopkeepers.Where(s => shopIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id);
+
         var result = visits.Select(v => new DetailedVisitDto
         {
             Id = v.Id,
             VisitDate = TimeZoneHelper.ConvertUtcToIst(v.CheckInTimestamp),
             ExecutiveName = v.SalesExecutive.Name,
-            LocationName = v.LocationType == LocationType.School ? schools.GetValueOrDefault(v.LocationId)?.Name ?? "N/A" : "Other",
+            LocationName = v.LocationType switch
+            {
+                LocationType.School => schools.GetValueOrDefault(v.LocationId)?.Name ?? "N/A",
+                LocationType.CoachingCenter => coachings.GetValueOrDefault(v.LocationId)?.Name ?? "N/A",
+                LocationType.Shopkeeper => shops.GetValueOrDefault(v.LocationId)?.Name ?? "N/A",
+                _ => "Unknown"
+            },
             LocationType = v.LocationType.ToString(),
             Area = v.LocationType == LocationType.School ? schools.GetValueOrDefault(v.LocationId)?.AssignedArea ?? "N/A" : "N/A",
-            PrincipalRemarks = v.PrincipalRemarks
+            PrincipalRemarks = v.PrincipalRemarks,
+            LocationVisitCount = v.LocationType switch
+            {
+                LocationType.School => schools.GetValueOrDefault(v.LocationId)?.VisitCount ?? 0,
+                LocationType.CoachingCenter => coachings.GetValueOrDefault(v.LocationId)?.VisitCount ?? 0,
+                LocationType.Shopkeeper => shops.GetValueOrDefault(v.LocationId)?.VisitCount ?? 0,
+                _ => 0
+            }
         }).ToList();
         return Ok(result);
     }
@@ -349,11 +492,12 @@ public class ReportsController : BaseApiController
             return Forbid();
         }
 
-        // 1. Location ka naam fetch karein
+        // 1. Location ka naam aur visit count fetch karein
         string locationName = "Unknown Location";
         string? contactPersonLabel = null;
         string? contactPersonName = null;
         string? contactPersonMobile = null;
+        int locationVisitCount = 0;
 
         switch (visit.LocationType)
         {
@@ -365,6 +509,7 @@ public class ReportsController : BaseApiController
                     contactPersonLabel = "Principal";
                     contactPersonName = school.PrincipalName;
                     contactPersonMobile = school.PrincipalMobileNumber;
+                    locationVisitCount = school.VisitCount;
                 }
                 break;
             case LocationType.CoachingCenter:
@@ -375,6 +520,7 @@ public class ReportsController : BaseApiController
                     contactPersonLabel = "Teacher/Contact";
                     contactPersonName = coaching.TeacherName;
                     contactPersonMobile = coaching.MobileNumber;
+                    locationVisitCount = coaching.VisitCount;
                 }
                 break;
             case LocationType.Shopkeeper:
@@ -385,6 +531,7 @@ public class ReportsController : BaseApiController
                     contactPersonLabel = "Owner/Shopkeeper";
                     contactPersonName = shop.OwnerName;
                     contactPersonMobile = shop.MobileNumber;
+                    locationVisitCount = shop.VisitCount;
                 }
                 break;
         }
@@ -454,11 +601,12 @@ public class ReportsController : BaseApiController
             CheckInPhotoUrl = visit.CheckInPhotoUrl,
             Latitude = visit.Latitude,
             Longitude = visit.Longitude,
-            ContactPersonLabel = contactPersonLabel, // Nayi property
-            ContactPersonName = contactPersonName,   // Nayi property
-            ContactPersonMobile = contactPersonMobile, // Nayi property
+            ContactPersonLabel = contactPersonLabel,
+            ContactPersonName = contactPersonName,
+            ContactPersonMobile = contactPersonMobile,
             PrincipalRemarks = visit.PrincipalRemarks,
             PermissionToMeetTeachers = visit.PermissionToMeetTeachers,
+            LocationVisitCount = locationVisitCount,
             TeacherInteractions = teacherInteractions
         };
 
@@ -501,17 +649,18 @@ public async Task<IActionResult> GetBulkVisitDetailReport([FromBody] List<int> v
         // Logic from single visit details, reused here
         string locationName = "Unknown";
         string? contactPersonLabel = null, contactPersonName = null, contactPersonMobile = null;
+        int locationVisitCount = 0;
 
         switch (visit.LocationType)
         {
             case LocationType.School:
-                if (schools.TryGetValue(visit.LocationId, out var school)) { locationName = school.Name; contactPersonLabel = "Principal"; contactPersonName = school.PrincipalName; contactPersonMobile = school.PrincipalMobileNumber; }
+                if (schools.TryGetValue(visit.LocationId, out var school)) { locationName = school.Name; contactPersonLabel = "Principal"; contactPersonName = school.PrincipalName; contactPersonMobile = school.PrincipalMobileNumber; locationVisitCount = school.VisitCount; }
                 break;
             case LocationType.CoachingCenter:
-                if (coachings.TryGetValue(visit.LocationId, out var coaching)) { locationName = coaching.Name; contactPersonLabel = "Teacher/Contact"; contactPersonName = coaching.TeacherName; contactPersonMobile = coaching.MobileNumber; }
+                if (coachings.TryGetValue(visit.LocationId, out var coaching)) { locationName = coaching.Name; contactPersonLabel = "Teacher/Contact"; contactPersonName = coaching.TeacherName; contactPersonMobile = coaching.MobileNumber; locationVisitCount = coaching.VisitCount; }
                 break;
             case LocationType.Shopkeeper:
-                if (shops.TryGetValue(visit.LocationId, out var shop)) { locationName = shop.Name; contactPersonLabel = "Owner/Shopkeeper"; contactPersonName = shop.OwnerName; contactPersonMobile = shop.MobileNumber; }
+                if (shops.TryGetValue(visit.LocationId, out var shop)) { locationName = shop.Name; contactPersonLabel = "Owner/Shopkeeper"; contactPersonName = shop.OwnerName; contactPersonMobile = shop.MobileNumber; locationVisitCount = shop.VisitCount; }
                 break;
         }
 
@@ -544,10 +693,11 @@ public async Task<IActionResult> GetBulkVisitDetailReport([FromBody] List<int> v
             VisitTimestamp = TimeZoneHelper.ConvertUtcToIst(visit.CheckInTimestamp),
             LocationName = locationName,
             LocationType = visit.LocationType.ToString(),
-  ContactPersonLabel = contactPersonLabel, 
+            ContactPersonLabel = contactPersonLabel, 
             ContactPersonName = contactPersonName,
             ContactPersonMobile = contactPersonMobile,
             PrincipalRemarks = visit.PrincipalRemarks,
+            LocationVisitCount = locationVisitCount,
             TeacherInteractions = teacherInteractions
         });
     }

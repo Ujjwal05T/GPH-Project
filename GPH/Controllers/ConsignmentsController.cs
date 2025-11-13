@@ -64,13 +64,25 @@ public class ConsignmentsController : ControllerBase
         var items = JsonSerializer.Deserialize<List<ConsignmentItemDto>>(consignmentDto.ItemsJson ?? "[]", options);
         if (items != null && items.Any())
         {
-            // Ab is nayi 'items' list par loop chalayein
+            // Fetch all book IDs to get their unit prices
+            var bookIds = items.Select(i => i.BookId).ToList();
+            var books = await _context.Books
+                .Where(b => bookIds.Contains(b.Id))
+                .ToDictionaryAsync(b => b.Id, b => b.UnitPrice);
+
+            // Add items with unit price from the Books table
             foreach (var itemDto in items)
             {
+                if (!books.TryGetValue(itemDto.BookId, out var unitPrice))
+                {
+                    return BadRequest(new { message = $"Book with ID {itemDto.BookId} not found." });
+                }
+
                 newConsignment.Items.Add(new ConsignmentItem
                 {
                     BookId = itemDto.BookId,
-                    Quantity = itemDto.Quantity
+                    Quantity = itemDto.Quantity,
+                    UnitPrice = unitPrice
                 });
             }
         }

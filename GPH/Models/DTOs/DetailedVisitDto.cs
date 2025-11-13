@@ -1,12 +1,12 @@
 namespace GPH.DTOs;
 public class DetailedVisitDto
 {
-          public int Id { get; set; }
-
+    public int Id { get; set; }
     public DateTime VisitDate { get; set; }
     public string ExecutiveName { get; set; } = string.Empty;
     public string LocationName { get; set; } = string.Empty;
     public string LocationType { get; set; } = string.Empty;
     public string Area { get; set; } = string.Empty;
     public string? PrincipalRemarks { get; set; }
+    public int LocationVisitCount { get; set; } // Total visits to this location
 }

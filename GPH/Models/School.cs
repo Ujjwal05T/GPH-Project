@@ -42,8 +42,9 @@ public class School
     // This defines the one-to-many relationship: one School has many Teachers.
     public ICollection<Teacher> Teachers { get; set; } = new List<Teacher>();
     public bool IsLocationVerified { get; set; } = false;
-            public int? CreatedByExecutiveId { get; set; } // Nullable
-            public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public int? CreatedByExecutiveId { get; set; } // Nullable
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-
+    // --- Visit Tracking ---
+    public int VisitCount { get; set; } = 0;
 }

@@ -14,8 +14,8 @@ public class SchoolDto
 
     public string? PrincipalName { get; set; }
     public int TotalStudentCount { get; set; }
-        // --- ADD THESE TWO PROPERTIES ---
+    // --- ADD THESE TWO PROPERTIES ---
     public double? OfficialLatitude { get; set; }
     public double? OfficialLongitude { get; set; }
-
+    public int VisitCount { get; set; } // Total visits to this school
 }

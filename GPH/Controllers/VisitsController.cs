@@ -110,6 +110,33 @@ public class VisitsController : BaseApiController
         };
 
         _context.Visits.Add(newVisit);
+
+        // --- INCREMENT VISIT COUNT FOR THE LOCATION ---
+        switch (visitDto.LocationType)
+        {
+            case LocationType.School:
+                var schoolToUpdate = await _context.Schools.FindAsync(visitDto.LocationId);
+                if (schoolToUpdate != null)
+                {
+                    schoolToUpdate.VisitCount++;
+                }
+                break;
+            case LocationType.CoachingCenter:
+                var coachingToUpdate = await _context.CoachingCenters.FindAsync(visitDto.LocationId);
+                if (coachingToUpdate != null)
+                {
+                    coachingToUpdate.VisitCount++;
+                }
+                break;
+            case LocationType.Shopkeeper:
+                var shopToUpdate = await _context.Shopkeepers.FindAsync(visitDto.LocationId);
+                if (shopToUpdate != null)
+                {
+                    shopToUpdate.VisitCount++;
+                }
+                break;
+        }
+
         await _context.SaveChangesAsync();
         var daJustAwarded = await _dailyAllowanceService.CheckAndAwardExecutiveDA(newVisit.SalesExecutiveId, newVisit.CheckInTimestamp);
 if (daJustAwarded)
